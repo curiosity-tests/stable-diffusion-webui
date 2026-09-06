@@ -26,7 +26,7 @@ permissions:
 env:
   # The one variable that separates the arms: on baseline, action-checkout
   # skips its Set up Chalk step entirely.
-  CHALK_ON: ${{ github.event_name == 'workflow_dispatch' && inputs.leg != 'baseline' }}
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
 
 run-name: "Tests ${{ inputs.leg || 'push' }} ${{ inputs.racecar_run }}"
 
@@ -34,7 +34,7 @@ jobs:
   test:
     name: tests on CPU with empty model
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    if: ${{ 'push' != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name }}
     steps:
       - name: Checkout Code
         uses: crashappsec/action-checkout@main
