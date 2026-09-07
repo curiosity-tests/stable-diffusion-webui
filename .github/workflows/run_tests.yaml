@@ -68,21 +68,33 @@ jobs:
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_PROGRESS_BAR: "off"
-      # launch.py installs openai/CLIP from an sdist before it applies
-      # requirements_versions.txt, so pip's build-isolation env resolves the newest
-      # setuptools (84.0.0), which no longer ships pkg_resources - CLIP's setup.py
-      # imports it and the step dies with "RuntimeError: Couldn't install clip."
-      # Upstream master fails the same step for the same reason
-      # (AUTOMATIC1111/stable-diffusion-webui run 34033539722). This makes the
-      # setuptools==69.5.1 pin that requirements_versions.txt already carries
-      # ("temp fix for compatibility with some old packages") reach the build env
-      # too, which is what upstream's last green run of this workflow did.
-      - name: Constrain pip build isolation to the pinned setuptools
-        run: echo 'setuptools==69.5.1' > "$RUNNER_TEMP/pip-constraints.txt"
+      # launch.py installs openai/CLIP from an sdist, and pip's build-isolation env
+      # resolves the newest setuptools (84.0.0), which no longer ships pkg_resources
+      # - CLIP's setup.py imports it, so the next step dies with "RuntimeError:
+      # Couldn't install clip." Upstream master fails the same step for the same
+      # reason (AUTOMATIC1111/stable-diffusion-webui run 34033539722); the last green
+      # run of this workflow (34017722794) carried a not-yet-merged patch that
+      # installs CLIP with --no-build-isolation against setuptools 69.5.1, which is
+      # the version requirements_versions.txt already pins.
+      #
+      # It has to be the flag, not the environment: PIP_NO_BUILD_ISOLATION=1 shows up
+      # in `pip config debug` and still builds in an overlay, and PIP_CONSTRAINT is
+      # not applied to build-isolation dependencies at all (both verified against
+      # this exact archive on pip 26.2.1/python 3.10). --no-deps keeps CLIP from
+      # dragging in the default-index torch; launch.py installs torch itself from
+      # TORCH_INDEX_URL, and is_installed("clip") then skips its own install.
+      - name: Pre-install CLIP without pip build isolation
+        run: |
+          python -m pip install "setuptools==69.5.1" wheel
+          python -m pip install --no-build-isolation --no-deps \
+            "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip"
+          python -m pip install ftfy regex tqdm
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PIP_PROGRESS_BAR: "off"
       - name: Setup environment
         run: python launch.py --skip-torch-cuda-test --exit
         env:
-          PIP_CONSTRAINT: ${{ runner.temp }}/pip-constraints.txt
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_PROGRESS_BAR: "off"
           TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
