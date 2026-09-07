@@ -68,9 +68,21 @@ jobs:
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_PROGRESS_BAR: "off"
+      # launch.py installs openai/CLIP from an sdist before it applies
+      # requirements_versions.txt, so pip's build-isolation env resolves the newest
+      # setuptools (84.0.0), which no longer ships pkg_resources - CLIP's setup.py
+      # imports it and the step dies with "RuntimeError: Couldn't install clip."
+      # Upstream master fails the same step for the same reason
+      # (AUTOMATIC1111/stable-diffusion-webui run 34033539722). This makes the
+      # setuptools==69.5.1 pin that requirements_versions.txt already carries
+      # ("temp fix for compatibility with some old packages") reach the build env
+      # too, which is what upstream's last green run of this workflow did.
+      - name: Constrain pip build isolation to the pinned setuptools
+        run: echo 'setuptools==69.5.1' > "$RUNNER_TEMP/pip-constraints.txt"
       - name: Setup environment
         run: python launch.py --skip-torch-cuda-test --exit
         env:
+          PIP_CONSTRAINT: ${{ runner.temp }}/pip-constraints.txt
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_PROGRESS_BAR: "off"
           TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
